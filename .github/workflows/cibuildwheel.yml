@@ -80,7 +80,12 @@ jobs:
       - name: Get the tag name and determine if it's a prerelease
         id: get_tag_info
         run: |
-          FULL_TAG=${GITHUB_REF#refs/tags/}
+          # On a tag push this is refs/tags/<tag>; on workflow_dispatch
+          # github.ref is the branch, so the dispatch input carries the tag.
+          # Reading GITHUB_REF unconditionally made every dispatched run fail
+          # here after building both wheels successfully.
+          RAW="${{ inputs.ref || github.ref }}"
+          FULL_TAG=${RAW#refs/tags/}
           if [[ $FULL_TAG == release-* ]]; then
             TAG_NAME=${FULL_TAG#release-}
             IS_PRERELEASE=false
