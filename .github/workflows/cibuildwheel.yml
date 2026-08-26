@@ -7,6 +7,15 @@ on:
       # ** matches 'zero or more of any character'
       - 'release-v[0-9]+.[0-9]+.[0-9]+**'
       - 'prerelease-v[0-9]+.[0-9]+.[0-9]+**'
+  # Added in this fork: lets a build be re-run against an existing tag without
+  # inventing a new version number, which matters here because the wheels are
+  # the product and a failed build should not cost a version.
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag or ref to build wheels from"
+        required: true
+        default: "release-v0.9.3"
 jobs:
   build_wheels:
     name: Build wheels on ${{ matrix.os }}
@@ -20,6 +29,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ inputs.ref || github.ref }}
       - name: Build wheels
         uses: pypa/cibuildwheel@294735312765b09d24a2fbec22660ce817587d55 # v4.1.0
         env:
