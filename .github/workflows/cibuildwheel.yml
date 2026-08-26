@@ -98,6 +98,9 @@ jobs:
           fi
           echo "FULL_TAG=$TAG_NAME" >> $GITHUB_ENV
           echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+          # The tag to attach the release to. On a dispatch there is no tag in
+          # github.ref, so the action cannot infer it.
+          echo "TAG_NAME_FULL=${RAW#refs/tags/}" >> $GITHUB_ENV
           echo "IS_PRERELEASE=$IS_PRERELEASE" >> $GITHUB_ENV
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -108,13 +111,35 @@ jobs:
       - name: Create Draft Release
         id: create_release
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
-        if: startsWith(github.ref, 'refs/tags/')
+        # Must cover dispatched runs too. Guarding only on refs/tags meant a
+        # dispatch skipped this step — and a skipped step does not fail a job,
+        # so the run went green having built wheels and published nothing.
+        if: startsWith(github.ref, 'refs/tags/') || inputs.ref != ''
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          # Explicit: on a dispatch the action cannot infer a tag from a
+          # branch ref.
+          tag_name: ${{ env.TAG_NAME_FULL }}
           name: ${{ env.TAG_NAME }}
           # Published, not draft: the wheels are consumed straight from the
           # release by uv, and a draft release is not downloadable.
           draft: false
           prerelease: ${{ env.IS_PRERELEASE }}
           files: "./dist/*" 
+
+      - name: Confirm the release exists
+        # The point of this job is the published release. Without this, any
+        # future condition that skips the step above turns a no-op into a
+        # green run — which is how this workflow already failed once.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          n=$(gh release view "$TAG_NAME_FULL" -R "$GITHUB_REPOSITORY" \
+                --json assets --jq '.assets | length')
+          echo "release $TAG_NAME_FULL has $n asset(s)"
+          if [ "$n" -lt 2 ]; then
+            echo "::error::expected at least 2 wheels attached, found $n" >&2
+            exit 1
+          fi
