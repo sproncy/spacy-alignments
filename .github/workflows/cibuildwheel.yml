@@ -13,8 +13,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # macos-13 is an intel runner, macos-14 is apple silicon
-        os: [ubuntu-latest, windows-latest, macos-14, ubuntu-24.04-arm]
+        # Only what the Sproncy fleet consumes: self-hosted CI is linux/x64 and
+        # developer machines are Apple silicon. Upstream also builds windows and
+        # linux-arm; add them back to this list if that ever changes.
+        os: [ubuntu-latest, macos-14]
 
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -22,6 +24,10 @@ jobs:
         uses: pypa/cibuildwheel@294735312765b09d24a2fbec22660ce817587d55 # v4.1.0
         env:
           # Set up rust
+          # cp314 is the whole point of this fork; upstream already ships
+          # wheels for everything earlier, so building them here would be
+          # duplicate artefacts that could shadow upstream's by accident.
+          CIBW_BUILD: "cp314-*"
           CIBW_BEFORE_ALL_LINUX: curl -sSf https://sh.rustup.rs | sh -s -- -y
           CIBW_BEFORE_ALL_WINDOWS: rustup target add i686-pc-windows-msvc
           CIBW_ENVIRONMENT_LINUX: "PATH=$HOME/.cargo/bin:$PATH"
@@ -91,6 +97,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           name: ${{ env.TAG_NAME }}
-          draft: true
+          # Published, not draft: the wheels are consumed straight from the
+          # release by uv, and a draft release is not downloadable.
+          draft: false
           prerelease: ${{ env.IS_PRERELEASE }}
           files: "./dist/*" 
